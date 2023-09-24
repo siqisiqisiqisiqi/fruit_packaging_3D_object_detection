@@ -6,6 +6,7 @@ ROOT_DIR = os.path.dirname(BASE_DIR)
 sys.path.append(ROOT_DIR)
 
 import numpy as np
+from scipy import signal
 from src.params import *
 
 # g_type2class = {'Car': 0, 'Pedestrian': 1, 'Cyclist': 2}
@@ -20,4 +21,7 @@ from src.params import *
 # for i in range(NUM_SIZE_CLUSTER):
 #     g_mean_size_arr[i, :] = g_type_mean_size[g_class2type[i]]
 
-print(g_type2class)
+# print(g_type2class)
+
+a = np.array([[1,2,3],[4,5,6],[7,8,9],[11,12,13]])
+print(np.random.choice(a, size=3))
