@@ -14,6 +14,7 @@ import open3d as o3d
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from numpy.linalg import norm
+
 from src.params import *
 
 
@@ -27,15 +28,9 @@ class StereoCustomDataset(Dataset):
 
         self.pc_path = pc_path
         self.label_path = label_path
-        self.downsample = downsample
+        self.DS = downsample
 
         self.pc_list = glob(f"{pc_path}/*.ply")
-
-    def L2_norm(center1, center2):
-        return norm(center1 - center2, 2)
-
-    def __len__(self):
-        return len(self.pc_list)
 
     def downsample(self, pc_in_numpy, num_object_points):
         pc_num = len(pc_in_numpy)
@@ -43,11 +38,13 @@ class StereoCustomDataset(Dataset):
         downsample_pc = pc_in_numpy[idx, :]
         return downsample_pc
 
+    def __len__(self):
+        return len(self.pc_list)
+
     def __getitem__(self, index):
         pcd = o3d.io.read_point_cloud(self.pc_list[index])
         pc_in_numpy = np.asarray(pcd.points)
         centroid_point = np.sum(pc_in_numpy, 0) / len(pc_in_numpy)
-
         pc_name = self.pc_list[index].split("/")[-1].split("_")
         label_dir = f"{label_path}/{pc_name[0]}.json"
 
@@ -62,8 +59,7 @@ class StereoCustomDataset(Dataset):
             distance.append(norm(label_center - centroid_point, 2))
         idx = np.argmin(distance)
         label = d['objects'][idx]
-
-        if self.downsample:
+        if self.DS:
             pc_in_numpy = self.downsample(pc_in_numpy, NUM_OBJECT_POINT)
         return pc_in_numpy, label
 
@@ -71,6 +67,12 @@ class StereoCustomDataset(Dataset):
 if __name__ == "__main__":
     dataset = StereoCustomDataset(pc_path, label_path)
     train_features, train_labels = next(iter(dataset))
-    print(train_features)
-    print(train_labels)
-    # next(iter(dataset))
+    # visualize the downsampled point cloud
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(train_features)
+    o3d.visualization.draw_geometries([pcd])
+    # split the dataset into train and test dataset
+    train_size = int(0.8*len(dataset))
+    test_size = len(dataset) - train_size
+    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+    

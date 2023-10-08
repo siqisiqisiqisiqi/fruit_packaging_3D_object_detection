@@ -6,7 +6,7 @@ ROOT_DIR = os.path.dirname(BASE_DIR)
 sys.path.append(ROOT_DIR)
 
 import numpy as np
-from box_util import box3d_iou
+from utils.box_util import box3d_iou
 # from model_util import g_type_mean_size, g_class2type
 from src.params import *
 

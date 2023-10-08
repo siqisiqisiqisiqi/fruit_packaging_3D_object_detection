@@ -113,72 +113,72 @@ class Amodal3DModel(nn.Module):
         self.Loss = PointNetLoss()
 
 
-def forward(self, data_dicts):
+    def forward(self, data_dicts):
 
-    # point cloud after the instance segmentation
-    point_cloud = data_dicts.get('point_cloud')
-    point_cloud = point_cloud[:, :self.n_channel, :]
-    one_hot = data_dicts.get('one_hot')
-    bs = point_cloud.shape[0]  # batch size
+        # point cloud after the instance segmentation
+        point_cloud = data_dicts.get('point_cloud')
+        point_cloud = point_cloud[:, :self.n_channel, :]
+        one_hot = data_dicts.get('one_hot')
+        bs = point_cloud.shape[0]  # batch size
 
-    # If not None, use to Compute Loss
-    box3d_center_label = data_dicts.get('box3d_center')  # torch.Size([32, 3])
-    size_class_label = data_dicts.get('size_class')  # torch.Size([32, 1])
-    size_residual_label = data_dicts.get(
-        'size_residual')  # torch.Size([32, 3])
-    heading_class_label = data_dicts.get('angle_class')  # torch.Size([32, 1])
-    heading_residual_label = data_dicts.get(
-        'angle_residual')  # torch.Size([32, 1])
+        # If not None, use to Compute Loss
+        box3d_center_label = data_dicts.get('box3d_center')  # torch.Size([32, 3])
+        size_class_label = data_dicts.get('size_class')  # torch.Size([32, 1])
+        size_residual_label = data_dicts.get(
+            'size_residual')  # torch.Size([32, 3])
+        heading_class_label = data_dicts.get('angle_class')  # torch.Size([32, 1])
+        heading_residual_label = data_dicts.get(
+            'angle_residual')  # torch.Size([32, 1])
 
-    # object_pts_xyz size (batchsize, number object point, 3)
-    object_pts_xyz, mask_xyz_mean = point_cloud_process(point_cloud)
+        # object_pts_xyz size (batchsize, number object point, 3)
+        object_pts_xyz, mask_xyz_mean = point_cloud_process(point_cloud)
 
-    # T-net
-    object_pts_xyz = object_pts_xyz.cuda()
-    center_delta = self.STN(object_pts_xyz, one_hot)  # (32,3)
-    stage1_center = center_delta + mask_xyz_mean  # (32,3)
+        # T-net
+        object_pts_xyz = object_pts_xyz.cuda()
+        center_delta = self.STN(object_pts_xyz, one_hot)  # (32,3)
+        stage1_center = center_delta + mask_xyz_mean  # (32,3)
 
-    if (np.isnan(stage1_center.cpu().detach().numpy()).any()):
-        ipdb.set_trace()
-    object_pts_xyz_new = object_pts_xyz - \
-        center_delta.view(
-            center_delta.shape[0], -1, 1).repeat(1, 1, object_pts_xyz.shape[-1])
+        if (np.isnan(stage1_center.cpu().detach().numpy()).any()):
+            ipdb.set_trace()
+        object_pts_xyz_new = object_pts_xyz - \
+            center_delta.view(
+                center_delta.shape[0], -1, 1).repeat(1, 1, object_pts_xyz.shape[-1])
 
-    # 3D Box Estimation
-    box_pred = self.est(object_pts_xyz_new, one_hot)
-    center_boxnet, \
-        heading_scores, heading_residual_normalized, heading_residual, \
-        size_scores, size_residual_normalized, size_residual = \
-        parse_output_to_tensors(box_pred)
+        # 3D Box Estimation
+        box_pred = self.est(object_pts_xyz_new, one_hot)
+        center_boxnet, \
+            heading_scores, heading_residual_normalized, heading_residual, \
+            size_scores, size_residual_normalized, size_residual = \
+            parse_output_to_tensors(box_pred)
 
-    box3d_center = center_boxnet + stage1_center  # bs,3
+        box3d_center = center_boxnet + stage1_center  # bs,3
 
-    losses = self.Loss(box3d_center, box3d_center_label, stage1_center,
-                       heading_scores, heading_residual_normalized,
-                       heading_residual,
-                       heading_class_label, heading_residual_label,
-                       size_scores, size_residual_normalized,
-                       size_residual,
-                       size_class_label, size_residual_label)
+        losses = self.Loss(box3d_center, box3d_center_label, stage1_center,
+                        heading_scores, heading_residual_normalized,
+                        heading_residual,
+                        heading_class_label, heading_residual_label,
+                        size_scores, size_residual_normalized,
+                        size_residual,
+                        size_class_label, size_residual_label)
 
-    for key in losses.keys():
-        losses[key] = losses[key] / bs
+        for key in losses.keys():
+            losses[key] = losses[key] / bs
 
-        with torch.no_grad():
-            iou2ds, iou3ds = compute_box3d_iou(
-                box3d_center.detach().cpu().numpy(),
-                heading_scores.detach().cpu().numpy(),
-                heading_residual.detach().cpu().numpy(),
-                size_scores.detach().cpu().numpy(),
-                size_residual.detach().cpu().numpy(),
-                box3d_center_label.detach().cpu().numpy(),
-                heading_class_label.detach().cpu().numpy(),
-                heading_residual_label.detach().cpu().numpy(),
-                size_class_label.detach().cpu().numpy(),
-                size_residual_label.detach().cpu().numpy())
-        metrics = {
-            'iou2d': iou2ds.mean(),
-            'iou3d': iou3ds.mean(),
-            'iou3d_0.7': np.sum(iou3ds >= 0.7) / bs
-        }
-        return losses, metrics
+            with torch.no_grad():
+                iou2ds, iou3ds = compute_box3d_iou(
+                    box3d_center.detach().cpu().numpy(),
+                    heading_scores.detach().cpu().numpy(),
+                    heading_residual.detach().cpu().numpy(),
+                    size_scores.detach().cpu().numpy(),
+                    size_residual.detach().cpu().numpy(),
+                    box3d_center_label.detach().cpu().numpy(),
+                    heading_class_label.detach().cpu().numpy(),
+                    heading_residual_label.detach().cpu().numpy(),
+                    size_class_label.detach().cpu().numpy(),
+                    size_residual_label.detach().cpu().numpy())
+            metrics = {
+                'iou2d': iou2ds.mean(),
+                'iou3d': iou3ds.mean(),
+                'iou3d_0.7': np.sum(iou3ds >= 0.7) / bs
+            }
+            return losses, metrics
