@@ -113,28 +113,28 @@ class Amodal3DModel(nn.Module):
         self.Loss = PointNetLoss()
 
 
-    def forward(self, data_dicts):
+    def forward(self, features, label_dicts):
 
         # point cloud after the instance segmentation
-        point_cloud = data_dicts.get('point_cloud')
+        point_cloud = features.permute(0,2,1)
         point_cloud = point_cloud[:, :self.n_channel, :]
-        one_hot = data_dicts.get('one_hot')
+        one_hot = label_dicts.get('one_hot') #torch.Size([32, 3])
         bs = point_cloud.shape[0]  # batch size
 
         # If not None, use to Compute Loss
-        box3d_center_label = data_dicts.get('box3d_center')  # torch.Size([32, 3])
-        size_class_label = data_dicts.get('size_class')  # torch.Size([32, 1])
-        size_residual_label = data_dicts.get(
+        box3d_center_label = label_dicts.get('box3d_center')  # torch.Size([32, 3])
+        size_class_label = label_dicts.get('size_class')  # torch.Size([32, 1])
+        size_residual_label = label_dicts.get(
             'size_residual')  # torch.Size([32, 3])
-        heading_class_label = data_dicts.get('angle_class')  # torch.Size([32, 1])
-        heading_residual_label = data_dicts.get(
+        heading_class_label = label_dicts.get('angle_class')  # torch.Size([32, 1])
+        heading_residual_label = label_dicts.get(
             'angle_residual')  # torch.Size([32, 1])
 
         # object_pts_xyz size (batchsize, number object point, 3)
         object_pts_xyz, mask_xyz_mean = point_cloud_process(point_cloud)
 
         # T-net
-        object_pts_xyz = object_pts_xyz.cuda()
+        object_pts_xyz = object_pts_xyz.device()
         center_delta = self.STN(object_pts_xyz, one_hot)  # (32,3)
         stage1_center = center_delta + mask_xyz_mean  # (32,3)
 

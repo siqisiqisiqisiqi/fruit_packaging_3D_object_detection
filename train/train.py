@@ -62,15 +62,15 @@ def test(model, loader):
     }
 
     n_batches = 0
-    for i, data_dicts in tqdm(enumerate(loader), total=len(loader), smoothing=0.9):
+    for i, (features, label_dicts) in tqdm(enumerate(loader), total=len(loader), smoothing=0.9):
         n_batches += 1
 
-    data_dicts_var = {key: value.cuda() for key, value in data_dicts.items()}
-
+    data_dicts_var = {key: value.device() for key, value in label_dicts.items()}
+    features = features.to(device)
     model = model.eval()
 
     with torch.no_grad():
-        losses, metrics = model(data_dicts_var)
+        losses, metrics = model(features, data_dicts_var)
 
     for key in test_losses.keys():
         if key in losses.keys():
@@ -107,6 +107,8 @@ def train():
     scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer, step_size=LR_STEPS[0], gamma=GAMMA)
 
+    best_iou3d_70 = 0.0
+
     for epoch in range(MAX_EPOCH):
         train_losses = {
             'total_loss': 0.0,
@@ -124,14 +126,15 @@ def train():
             'iou3d_0.7': 0.0,
         }
         n_batches = 0
-        for i, data_dicts in tqdm(enumerate(train_dataloader), total=len(train_dataloader), smoothing=0.9):
+        for i, (features, label_dicts) in tqdm(enumerate(train_dataloader), total=len(train_dataloader), smoothing=0.9):
             n_batches += 1
 
             data_dicts_var = {key: value.cuda()
-                              for key, value in data_dicts.items()}
+                              for key, value in label_dicts.items()}
             optimizer.zero_grad()
             model = model.train()
-            losses, metrics = model(data_dicts_var)
+            features = features.to(device)
+            losses, metrics = model(features, data_dicts_var)
             total_loss = losses['total_loss']
             total_loss.backward()
             optimizer.step()
@@ -148,7 +151,7 @@ def train():
         for key in train_metrics.keys():
             train_metrics[key] /= n_batches
 
-        test_losses, test_metrics = test(model,test_dataloader)
+        test_losses, test_metrics = test(model, test_dataloader)
         scheduler.step()
 
         if scheduler.get_lr()[0] < MIN_LR:
@@ -157,7 +160,6 @@ def train():
 
         if test_metrics['iou3d_0.7'] >= best_iou3d_70:
             best_iou3d_70 = test_metrics['iou3d_0.7']
-            best_epoch = epoch + 1
             if epoch > MAX_EPOCH / 5:
                 savepath = f"{save_path}/epoch{epoch}.pth"
                 state = {
@@ -168,6 +170,7 @@ def train():
                     'optimizer_state_dict': optimizer.state_dict(),
                 }
                 torch.save(state, savepath)
+
 
 if __name__ == "__main__":
     train()

@@ -14,6 +14,8 @@ import open3d as o3d
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from numpy.linalg import norm
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from src.params import *
 
@@ -41,6 +43,23 @@ class StereoCustomDataset(Dataset):
     def __len__(self):
         return len(self.pc_list)
 
+    def convertlabelformat(self, label):
+        center = label['centroid']
+        box3d_center = np.array([center['x'], center['y'], center['z']])
+        size_class = np.array([g_type2onehotclass[label['name']]])
+        standard_size = g_type_mean_size[label['name']]
+        size = label['dimensions']
+        box_size = np.array([size['length'], size['width'], size['height']])
+        size_residual = standard_size - box_size
+        angle = label['rotations']['z']
+        angle_per_class = 2 * np.pi / float(NUM_HEADING_BIN)
+        angle_class = np.array([angle // angle_per_class])
+        angle_residual = np.array([angle % angle_per_class])
+        one_hot = np.array([1])
+        label2 = {'one_hot': one_hot, 'box3d_center': box3d_center, 'size_class': size_class, 'size_residual': size_residual,
+                  'angle_class': angle_class, 'angle_residual': angle_residual}
+        return label2
+
     def __getitem__(self, index):
         pcd = o3d.io.read_point_cloud(self.pc_list[index])
         pc_in_numpy = np.asarray(pcd.points)
@@ -61,18 +80,39 @@ class StereoCustomDataset(Dataset):
         label = d['objects'][idx]
         if self.DS:
             pc_in_numpy = self.downsample(pc_in_numpy, NUM_OBJECT_POINT)
-        return pc_in_numpy, label
+        label2 = self.convertlabelformat(label)
+        return pc_in_numpy, label2
 
 
 if __name__ == "__main__":
     dataset = StereoCustomDataset(pc_path, label_path)
-    train_features, train_labels = next(iter(dataset))
-    # visualize the downsampled point cloud
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(train_features)
-    o3d.visualization.draw_geometries([pcd])
+    # train_features, train_labels = next(iter(dataset))
+    # print(train_labels)
+
+    # # visualize the downsampled point cloud
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(train_features)
+    # o3d.visualization.draw_geometries([pcd])
+
     # split the dataset into train and test dataset
-    train_size = int(0.8*len(dataset))
+    train_size = int(0.8 * len(dataset))
     test_size = len(dataset) - train_size
-    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-    
+    train_dataset, test_dataset = torch.utils.data.random_split(
+        dataset, [train_size, test_size])
+    train_dataloader = DataLoader(
+        train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
+    train_features, train_labels = next(iter(train_dataloader))
+    box3d_center_label = train_labels.get('box3d_center')
+    size_class_label = train_labels.get('size_class')
+    size_residual_label = train_labels.get('size_residual')
+    heading_class_label = train_labels.get(
+        'angle_class')  # torch.Size([32, 1])
+    one_hot = train_labels.get(
+        'one_hot') 
+    heading_residual_label = train_labels.get('angle_residual')
+    features = train_features.permute(0, 2, 1)
+    num_point = features.shape[2]
+    xyz_sum = features.sum(2, keepdim=True)
+    xyz_mean = xyz_sum/num_point
+    print(features.shape)
+    # print(features.shape)

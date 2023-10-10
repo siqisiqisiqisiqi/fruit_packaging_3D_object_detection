@@ -13,13 +13,13 @@ MIN_LR = 1e-5
 ############################################################################
 NUM_HEADING_BIN = 12
 NUM_SIZE_CLUSTER = 1  # one cluster for each type
-NUM_OBJECT_POINT = 512
+NUM_OBJECT_POINT = 1024
 
 ###########################################################################
-g_type2class = {'Peach': 0}
+g_type2class = {'peach': 0}
 g_class2type = {g_type2class[t]: t for t in g_type2class}
-g_type2onehotclass = {'Peach': 0}
-g_type_mean_size = {'Peach': np.array([0.070, 0.064, 0.068])}
+g_type2onehotclass = {'peach': 0}
+g_type_mean_size = {'peach': np.array([0.070, 0.064, 0.068])}
 g_mean_size_arr = np.zeros((NUM_SIZE_CLUSTER, 3))  # size clustrs
 for i in range(NUM_SIZE_CLUSTER):
     g_mean_size_arr[i, :] = g_type_mean_size[g_class2type[i]]
