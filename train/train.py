@@ -65,19 +65,20 @@ def test(model, loader):
     for i, (features, label_dicts) in tqdm(enumerate(loader), total=len(loader), smoothing=0.9):
         n_batches += 1
 
-    data_dicts_var = {key: value.device() for key, value in label_dicts.items()}
-    features = features.to(device)
-    model = model.eval()
+        data_dicts_var = {key: value.cuda()
+                          for key, value in label_dicts.items()}
+        features = features.to(device, dtype=torch.float)
+        model = model.eval()
 
-    with torch.no_grad():
-        losses, metrics = model(features, data_dicts_var)
+        with torch.no_grad():
+            losses, metrics = model(features, data_dicts_var)
 
-    for key in test_losses.keys():
-        if key in losses.keys():
-            test_losses[key] += losses[key].detach().item()
-    for key in test_metrics.keys():
-        if key in metrics.keys():
-            test_metrics[key] += metrics[key]
+        for key in test_losses.keys():
+            if key in losses.keys():
+                test_losses[key] += losses[key].detach().item()
+        for key in test_metrics.keys():
+            if key in metrics.keys():
+                test_metrics[key] += metrics[key]
 
     for key in test_losses.keys():
         test_losses[key] /= n_batches
@@ -105,7 +106,7 @@ def train():
         weight_decay=WEIGHT_DECAY)
 
     scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, step_size=LR_STEPS[0], gamma=GAMMA)
+        optimizer, step_size=LR_STEPS, gamma=GAMMA)
 
     best_iou3d_70 = 0.0
 
@@ -133,7 +134,7 @@ def train():
                               for key, value in label_dicts.items()}
             optimizer.zero_grad()
             model = model.train()
-            features = features.to(device)
+            features = features.to(device, dtype=torch.float)
             losses, metrics = model(features, data_dicts_var)
             total_loss = losses['total_loss']
             total_loss.backward()

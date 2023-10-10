@@ -141,7 +141,7 @@ class PointNetLoss(nn.Module):
     def __init__(self):
         super(PointNetLoss, self).__init__()
 
-    def forward(self, logits, center, center_label, stage1_center,
+    def forward(self, center, center_label, stage1_center,
                 heading_scores, heading_residual_normalized, heading_residual,
                 heading_class_label, heading_residual_label,
                 size_scores, size_residual_normalized, size_residual,
@@ -173,7 +173,7 @@ class PointNetLoss(nn.Module):
         box_loss_weight: float scalar
 
         '''
-        bs = logits.shape[0]
+        bs = center.shape[0]
 
         # Center Regression Loss
         center_dist = torch.norm(center - center_label, dim=1)  # (32,)
@@ -184,9 +184,9 @@ class PointNetLoss(nn.Module):
 
         # Heading Loss
         heading_class_loss = F.nll_loss(F.log_softmax(heading_scores, dim=1),
-                                        heading_class_label.long())  # tensor(2.4505, grad_fn=<NllLossBackward>)
-        hcls_onehot = torch.eye(NUM_HEADING_BIN)[
-            heading_class_label.long()].cuda()  # 32,12
+                                        heading_class_label.squeeze().long())  # tensor(2.4505, grad_fn=<NllLossBackward>)
+        hcls_onehot = torch.eye(NUM_HEADING_BIN).cuda()[
+            heading_class_label.squeeze().long()]  # 32,12
         heading_residual_normalized_label = \
             heading_residual_label / (np.pi / NUM_HEADING_BIN)  # 32,
         heading_residual_normalized_dist = torch.sum(
@@ -197,20 +197,21 @@ class PointNetLoss(nn.Module):
                        heading_residual_normalized_label, delta=1.0)  # fix,2020.1.14
         # Size loss
         size_class_loss = F.nll_loss(F.log_softmax(size_scores, dim=1),
-                                     size_class_label.long())  # tensor(2.0240, grad_fn=<NllLossBackward>)
+                                     size_class_label.squeeze().long())  # tensor(2.0240, grad_fn=<NllLossBackward>)
 
-        scls_onehot = torch.eye(NUM_SIZE_CLUSTER)[
-            size_class_label.long()].cuda()  # 32,8
+        scls_onehot = torch.eye(NUM_SIZE_CLUSTER).cuda()[
+            size_class_label.squeeze().long()]  # 32,8
         # 32,8,3
         scls_onehot_repeat = scls_onehot.view(-1,
                                               NUM_SIZE_CLUSTER, 1).repeat(1, 1, 3)
+        #TODO check multi dimension analysis
         predicted_size_residual_normalized_dist = torch.sum(
             size_residual_normalized * scls_onehot_repeat.cuda(), dim=1)  # 32,3
         mean_size_arr_expand = torch.from_numpy(g_mean_size_arr).float().cuda() \
             .view(1, NUM_SIZE_CLUSTER, 3)  # 1,8,3
         mean_size_label = torch.sum(
             scls_onehot_repeat * mean_size_arr_expand, dim=1)  # 32,3
-        size_residual_label_normalized = size_residual_label / mean_size_label.cuda()
+        size_residual_label_normalized = size_residual_label / mean_size_label
 
         size_normalized_dist = torch.norm(size_residual_label_normalized -
                                           predicted_size_residual_normalized_dist, dim=1)  # 32
@@ -218,6 +219,7 @@ class PointNetLoss(nn.Module):
         size_residual_normalized_loss = huber_loss(
             size_normalized_dist, delta=1.0)
 
+        #TODO check if the box corner calculation is right.
         # Corner Loss
         corners_3d = get_box3d_corners(center,
                                        heading_residual, size_residual).cuda()  # (bs,NH,NS,8,3)(32, 12, 8, 8, 3)
@@ -226,7 +228,7 @@ class PointNetLoss(nn.Module):
                 1, NUM_HEADING_BIN, 1)  # (bs,NH=12,NS=8)
         corners_3d_pred = torch.sum(
             gt_mask.view(bs, NUM_HEADING_BIN, NUM_SIZE_CLUSTER, 1, 1)
-            .float().cuda() * corners_3d,
+            .float() * corners_3d,
             dim=[1, 2])  # (bs,8,3)
         heading_bin_centers = torch.from_numpy(
             np.arange(0, 2 * np.pi, 2 * np.pi / NUM_HEADING_BIN)).float().cuda()  # (NH,)
@@ -242,6 +244,7 @@ class PointNetLoss(nn.Module):
         size_label = torch.sum(
             scls_onehot.view(bs, NUM_SIZE_CLUSTER, 1).float() * size_label, axis=[1])  # (B,3)
 
+        #TODO check the box 3d corner calculation
         corners_3d_gt = get_box3d_corners_helper(
             center_label, heading_label, size_label)  # (B,8,3)
         corners_3d_gt_flip = get_box3d_corners_helper(

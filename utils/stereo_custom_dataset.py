@@ -114,5 +114,4 @@ if __name__ == "__main__":
     num_point = features.shape[2]
     xyz_sum = features.sum(2, keepdim=True)
     xyz_mean = xyz_sum/num_point
-    print(features.shape)
     # print(features.shape)

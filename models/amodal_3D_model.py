@@ -36,7 +36,7 @@ class PointNetEstimation(nn.Module):
 
         self.n_classes = n_classes
 
-        self.fc1 = nn.Linear(512 + 3, 512)
+        self.fc1 = nn.Linear(512 + n_classes, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, 3 + NUM_HEADING_BIN *
                              2 + NUM_SIZE_CLUSTER * 4)
@@ -62,7 +62,7 @@ class PointNetEstimation(nn.Module):
         expand_one_hot_vec = one_hot_vec.view(bs, -1)  # bs,3
         expand_global_feat = torch.cat(
             [global_feat, expand_one_hot_vec], 1)  # bs,515
-
+        print(expand_global_feat.shape)
         x = F.relu(self.fcbn1(self.fc1(expand_global_feat)))  # bs,512
         x = F.relu(self.fcbn2(self.fc2(x)))  # bs,256
         box_pred = self.fc3(x)  # bs,3+NUM_HEADING_BIN*2+NUM_SIZE_CLUSTER*4
@@ -91,6 +91,7 @@ class STNxyz(nn.Module):
 
     def forward(self, pts, one_hot_vec):
         bs = pts.shape[0]
+        print(pts.shape)
         x = F.relu(self.bn1(self.conv1(pts)))  # bs,128,n
         x = F.relu(self.bn2(self.conv2(x)))  # bs,128,n
         x = F.relu(self.bn3(self.conv3(x)))  # bs,256,n
@@ -134,7 +135,7 @@ class Amodal3DModel(nn.Module):
         object_pts_xyz, mask_xyz_mean = point_cloud_process(point_cloud)
 
         # T-net
-        object_pts_xyz = object_pts_xyz.device()
+        object_pts_xyz = object_pts_xyz.cuda()
         center_delta = self.STN(object_pts_xyz, one_hot)  # (32,3)
         stage1_center = center_delta + mask_xyz_mean  # (32,3)
 
@@ -152,7 +153,6 @@ class Amodal3DModel(nn.Module):
             parse_output_to_tensors(box_pred)
 
         box3d_center = center_boxnet + stage1_center  # bs,3
-
         losses = self.Loss(box3d_center, box3d_center_label, stage1_center,
                         heading_scores, heading_residual_normalized,
                         heading_residual,
@@ -172,9 +172,9 @@ class Amodal3DModel(nn.Module):
                     size_scores.detach().cpu().numpy(),
                     size_residual.detach().cpu().numpy(),
                     box3d_center_label.detach().cpu().numpy(),
-                    heading_class_label.detach().cpu().numpy(),
-                    heading_residual_label.detach().cpu().numpy(),
-                    size_class_label.detach().cpu().numpy(),
+                    heading_class_label.detach().cpu().numpy().squeeze(),
+                    heading_residual_label.detach().cpu().numpy().squeeze(),
+                    size_class_label.detach().cpu().numpy().squeeze(),
                     size_residual_label.detach().cpu().numpy())
             metrics = {
                 'iou2d': iou2ds.mean(),
