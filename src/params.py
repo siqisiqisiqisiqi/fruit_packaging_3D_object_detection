@@ -7,7 +7,7 @@ WEIGHT_DECAY = 0.0000
 LR_STEPS = 10
 GAMMA = 0.3
 BATCH_SIZE = 8
-MAX_EPOCH = 50
+MAX_EPOCH = 51
 MIN_LR = 1e-5
 
 ############################################################################

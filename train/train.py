@@ -11,6 +11,8 @@ import random
 import numpy as np
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import time
+import matplotlib.pyplot as plt
 
 from models.amodal_3D_model import Amodal3DModel
 from utils.stereo_custom_dataset import StereoCustomDataset
@@ -18,7 +20,7 @@ from src.params import *
 
 pc_path = os.path.join(PARENT_DIR, "datasets", "pointclouds")
 label_path = os.path.join(PARENT_DIR, "datasets", "labels")
-save_path = os.path.join(ROOT_DIR, "models")
+save_path = os.path.join(ROOT_DIR, "results")
 
 dataset = StereoCustomDataset(pc_path, label_path)
 train_size = int(0.8 * len(dataset))
@@ -33,6 +35,14 @@ test_dataloader = DataLoader(
 
 # test the dataloader
 # train_features, train_labels = next(iter(train_dataloader))
+
+strtime = time.strftime('%Y%m%d-%H%M%S',time.localtime(time.time()))
+strtime = strtime[4:8]
+
+result_path = f"{save_path}/{strtime}"
+isExist = os.path.exists(result_path)
+if not isExist:
+    os.makedirs(result_path)
 
 # select the device
 is_cuda = torch.cuda.is_available()
@@ -62,7 +72,7 @@ def test(model, loader):
     }
 
     n_batches = 0
-    for i, (features, label_dicts) in tqdm(enumerate(loader), total=len(loader), smoothing=0.9):
+    for i, (features, label_dicts, _) in tqdm(enumerate(loader), total=len(loader), smoothing=0.9):
         n_batches += 1
 
         data_dicts_var = {key: value.cuda()
@@ -87,6 +97,17 @@ def test(model, loader):
 
     return test_losses, test_metrics
 
+def visualization(train_loss, test_loss,path):
+    plt.plot(train_loss, c='b')
+    plt.plot(test_loss, c='r')
+    plt.legend(['Training set', 'test set'])
+    plt.title('Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('# of epoch')
+    plt.grid()
+    plt.savefig(f"{path}/result.jpg")
+    plt.show()
+
 
 def train():
     SEED = 1
@@ -109,7 +130,8 @@ def train():
         optimizer, step_size=LR_STEPS, gamma=GAMMA)
 
     best_iou3d_70 = 0.0
-
+    train_total_losses_data = []
+    test_total_losses_data = []
     for epoch in range(MAX_EPOCH):
         train_losses = {
             'total_loss': 0.0,
@@ -127,7 +149,7 @@ def train():
             'iou3d_0.7': 0.0,
         }
         n_batches = 0
-        for i, (features, label_dicts) in tqdm(enumerate(train_dataloader), total=len(train_dataloader), smoothing=0.9):
+        for i, (features, label_dicts, _) in tqdm(enumerate(train_dataloader), total=len(train_dataloader), smoothing=0.9):
             n_batches += 1
 
             data_dicts_var = {key: value.cuda()
@@ -151,8 +173,12 @@ def train():
             train_losses[key] /= n_batches
         for key in train_metrics.keys():
             train_metrics[key] /= n_batches
+        print(f"Finished the {epoch} epoch train +++++++++++++++++++ Total train loss is {train_losses['total_loss']}")
+        train_total_losses_data.append(train_losses['total_loss'])
 
         test_losses, test_metrics = test(model, test_dataloader)
+        print(f"Finished the {epoch} epoch test +++++++++++++++++++ Total test loss is {test_losses['total_loss']}")
+        test_total_losses_data.append(test_losses['total_loss'])
         scheduler.step()
 
         if scheduler.get_lr()[0] < MIN_LR:
@@ -161,8 +187,8 @@ def train():
 
         if test_metrics['iou3d_0.7'] >= best_iou3d_70:
             best_iou3d_70 = test_metrics['iou3d_0.7']
-            if epoch > MAX_EPOCH / 5:
-                savepath = f"{save_path}/epoch{epoch}.pth"
+            if epoch >= MAX_EPOCH / 5 and epoch % 5 == 0:
+                savepath = f"{result_path}/{strtime}_epoch{epoch}.pth"
                 state = {
                     'epoch': epoch + 1,
                     'train_iou3d_0.7': train_metrics['iou3d_0.7'],
@@ -171,7 +197,9 @@ def train():
                     'optimizer_state_dict': optimizer.state_dict(),
                 }
                 torch.save(state, savepath)
+                print(f"Saved the {epoch}th epoch model as {save_path}/{strtime}_epoch{epoch}.pth")
 
+    visualization(train_total_losses_data, test_total_losses_data, result_path)
 
 if __name__ == "__main__":
     train()

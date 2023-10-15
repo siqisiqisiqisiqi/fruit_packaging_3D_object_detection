@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 from glob import glob
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -15,7 +16,6 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from numpy.linalg import norm
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from src.params import *
 
@@ -43,7 +43,7 @@ class StereoCustomDataset(Dataset):
     def __len__(self):
         return len(self.pc_list)
 
-    def convertlabelformat(self, label):
+    def convertlabelformat(self, label, label_dir):
         center = label['centroid']
         box3d_center = np.array([center['x'], center['y'], center['z']])
         size_class = np.array([g_type2onehotclass[label['name']]])
@@ -56,9 +56,15 @@ class StereoCustomDataset(Dataset):
         angle_class = np.array([angle // angle_per_class])
         angle_residual = np.array([angle % angle_per_class])
         one_hot = np.array([1])
+        x = label_dir.split("/")
+        x[-2] = "images"
+        a = re.findall(r'\d+', x[-1])
+        num = a[0]
+        x[-1] = f"Image_{num}.jpg"
+        img_dir = "/".join(x)
         label2 = {'one_hot': one_hot, 'box3d_center': box3d_center, 'size_class': size_class, 'size_residual': size_residual,
                   'angle_class': angle_class, 'angle_residual': angle_residual}
-        return label2
+        return label2, img_dir
 
     def __getitem__(self, index):
         pcd = o3d.io.read_point_cloud(self.pc_list[index])
@@ -80,8 +86,8 @@ class StereoCustomDataset(Dataset):
         label = d['objects'][idx]
         if self.DS:
             pc_in_numpy = self.downsample(pc_in_numpy, NUM_OBJECT_POINT)
-        label2 = self.convertlabelformat(label)
-        return pc_in_numpy, label2
+        label2, img_dir = self.convertlabelformat(label, label_dir)
+        return pc_in_numpy, label2, img_dir
 
 
 if __name__ == "__main__":
@@ -101,17 +107,16 @@ if __name__ == "__main__":
         dataset, [train_size, test_size])
     train_dataloader = DataLoader(
         train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
-    train_features, train_labels = next(iter(train_dataloader))
+    train_features, train_labels, img_dir = next(iter(train_dataloader))
     box3d_center_label = train_labels.get('box3d_center')
     size_class_label = train_labels.get('size_class')
     size_residual_label = train_labels.get('size_residual')
     heading_class_label = train_labels.get(
         'angle_class')  # torch.Size([32, 1])
     one_hot = train_labels.get(
-        'one_hot') 
+        'one_hot')
     heading_residual_label = train_labels.get('angle_residual')
     features = train_features.permute(0, 2, 1)
     num_point = features.shape[2]
     xyz_sum = features.sum(2, keepdim=True)
-    xyz_mean = xyz_sum/num_point
-    # print(features.shape)
+    xyz_mean = xyz_sum / num_point

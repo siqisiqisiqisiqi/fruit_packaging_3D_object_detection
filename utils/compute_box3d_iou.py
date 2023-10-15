@@ -96,6 +96,7 @@ def compute_box3d_iou(center_pred,
 
     iou2d_list = []
     iou3d_list = []
+    corners_3d_list = []
     for i in range(batch_size):
         # calculate the 3D orientation and size
         heading_angle = class2angle(heading_class[i],
@@ -114,5 +115,6 @@ def compute_box3d_iou(center_pred,
         iou_3d, iou_2d = box3d_iou(corners_3d, corners_3d_label)
         iou3d_list.append(iou_3d)
         iou2d_list.append(iou_2d)
+        corners_3d_list.append(corners_3d)
     return np.array(iou2d_list, dtype=np.float32), \
-        np.array(iou3d_list, dtype=np.float32)
+                np.array(iou3d_list, dtype=np.float32), np.array(corners_3d_list, dtype=np.float32)

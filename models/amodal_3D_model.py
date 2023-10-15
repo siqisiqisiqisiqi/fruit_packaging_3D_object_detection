@@ -62,7 +62,6 @@ class PointNetEstimation(nn.Module):
         expand_one_hot_vec = one_hot_vec.view(bs, -1)  # bs,3
         expand_global_feat = torch.cat(
             [global_feat, expand_one_hot_vec], 1)  # bs,515
-        print(expand_global_feat.shape)
         x = F.relu(self.fcbn1(self.fc1(expand_global_feat)))  # bs,512
         x = F.relu(self.fcbn2(self.fc2(x)))  # bs,256
         box_pred = self.fc3(x)  # bs,3+NUM_HEADING_BIN*2+NUM_SIZE_CLUSTER*4
@@ -91,7 +90,6 @@ class STNxyz(nn.Module):
 
     def forward(self, pts, one_hot_vec):
         bs = pts.shape[0]
-        print(pts.shape)
         x = F.relu(self.bn1(self.conv1(pts)))  # bs,128,n
         x = F.relu(self.bn2(self.conv2(x)))  # bs,128,n
         x = F.relu(self.bn3(self.conv3(x)))  # bs,256,n
@@ -165,7 +163,7 @@ class Amodal3DModel(nn.Module):
             losses[key] = losses[key] / bs
 
             with torch.no_grad():
-                iou2ds, iou3ds = compute_box3d_iou(
+                iou2ds, iou3ds, corners = compute_box3d_iou(
                     box3d_center.detach().cpu().numpy(),
                     heading_scores.detach().cpu().numpy(),
                     heading_residual.detach().cpu().numpy(),
@@ -177,6 +175,7 @@ class Amodal3DModel(nn.Module):
                     size_class_label.detach().cpu().numpy().squeeze(),
                     size_residual_label.detach().cpu().numpy())
             metrics = {
+                'corners': corners,
                 'iou2d': iou2ds.mean(),
                 'iou3d': iou3ds.mean(),
                 'iou3d_0.7': np.sum(iou3ds >= 0.7) / bs
