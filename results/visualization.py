@@ -16,7 +16,7 @@ from models.amodal_3D_model import Amodal3DModel
 from utils.stereo_custom_dataset import StereoCustomDataset
 from src.params import *
 
-BS = 16
+BS = 32
 
 pc_path = os.path.join(PARENT_DIR, "datasets", "pointclouds")
 label_path = os.path.join(PARENT_DIR, "datasets", "labels")
@@ -105,12 +105,13 @@ def calculate_corner(centers, sizes):
 dataset = StereoCustomDataset(pc_path, label_path)
 
 dataloader = DataLoader(
-    dataset, batch_size=BS, shuffle=False, num_workers=1, drop_last=True)
+    dataset, batch_size=BS, shuffle=True, num_workers=1, drop_last=True)
 
 model = Amodal3DModel()
 model.to(device)
 
-result_path = f"{save_path}/1015/1015_epoch50.pth"
+result_path = f"{save_path}/1015/1015_epoch40.pth"
+# result_path = f"{save_path}/1013/1013_epoch50.pth"
 result = torch.load(result_path)
 model_state_dict = result['model_state_dict']
 
@@ -121,23 +122,23 @@ features, label_dicts, img_dir_list = next(iter(dataloader))
 features = features.to(device, dtype=torch.float)
 data_dicts_var = {key: value.cuda() for key, value in label_dicts.items()}
 
-box3d_center_label = label_dicts.get('box3d_center')  # torch.Size([32, 3])
-size_class_label = label_dicts.get('size_class')  # torch.Size([32, 1])
-size_residual_label = label_dicts.get('size_residual') 
-box3d_center = box3d_center_label.detach().cpu().numpy()
-size_class = size_class_label.detach().cpu().numpy()
-size_residual = size_residual_label.detach().cpu().numpy()
-size_label = []
-for i in range(BS):
-    size = g_type_mean_size[g_class2type[size_class[i,0]]]
-    size = size + size_residual[i]
-    size_label.append(size)
-corners_label = calculate_corner(box3d_center, np.array(size_label))
+# box3d_center_label = label_dicts.get('box3d_center')  # torch.Size([32, 3])
+# size_class_label = label_dicts.get('size_class')  # torch.Size([32, 1])
+# size_residual_label = label_dicts.get('size_residual') 
+# box3d_center = box3d_center_label.detach().cpu().numpy()
+# size_class = size_class_label.detach().cpu().numpy()
+# size_residual = size_residual_label.detach().cpu().numpy()
+# size_label = []
+# for i in range(BS):
+#     size = g_type_mean_size[g_class2type[size_class[i,0]]]
+#     size = size + size_residual[i]
+#     size_label.append(size)
+# corners_label = calculate_corner(box3d_center/100, np.array(size_label)/100)
 # visaulization(img_dir_list, corners_label)
 
 with torch.no_grad():
     losses, metrics = model(features, data_dicts_var)
 corners = metrics['corners']
-visaulization(img_dir_list, corners)
-
+visaulization(img_dir_list, corners/100)
+# visaulization(img_dir_list, corners)
 

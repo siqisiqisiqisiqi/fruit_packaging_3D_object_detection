@@ -101,3 +101,5 @@ b = np.array([[1],[2],[3]])
 
 np.savez('camera_params/Ext2.npz', mtx = mtx, dist = dist, Mat = Mat4, tvecs = tvecs)
 
+# for i in range(3,-1,-1):
+#     print(i)

@@ -7,7 +7,6 @@ sys.path.append(ROOT_DIR)
 
 import numpy as np
 from utils.box_util import box3d_iou
-# from model_util import g_type_mean_size, g_class2type
 from src.params import *
 
 
@@ -48,11 +47,20 @@ def get_3d_box(box_size, heading_angle, center):
                          [0, 1, 0],
                          [-s, 0, c]])
 
-    R = roty(heading_angle)
+    def rotz(t):
+        c = np.cos(t)
+        s = np.sin(t)
+        return np.array([[c, -s, 0],
+                         [s, c, 0],
+                         [0, 0, 1]])
+
+    R = rotz(heading_angle)
     l, w, h = box_size
+
     x_corners = [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2]
-    y_corners = [h / 2, h / 2, h / 2, h / 2, -h / 2, -h / 2, -h / 2, -h / 2]
-    z_corners = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
+    y_corners = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
+    z_corners = [h / 2, h / 2, h / 2, h / 2, -h / 2, -h / 2, -h / 2, -h / 2]
+
     corners_3d = np.dot(R, np.vstack([x_corners, y_corners, z_corners]))
     corners_3d[0, :] = corners_3d[0, :] + center[0]
     corners_3d[1, :] = corners_3d[1, :] + center[1]
@@ -101,8 +109,9 @@ def compute_box3d_iou(center_pred,
         # calculate the 3D orientation and size
         heading_angle = class2angle(heading_class[i],
                                     heading_residual[i], NUM_HEADING_BIN)
+        # heading_angle = 0
         box_size = class2size(size_class[i], size_residual[i])
-        # calculate the box corner coordinates 
+        # calculate the box corner coordinates
         corners_3d = get_3d_box(box_size, heading_angle, center_pred[i])
 
         heading_angle_label = class2angle(heading_class_label[i],
@@ -117,4 +126,5 @@ def compute_box3d_iou(center_pred,
         iou2d_list.append(iou_2d)
         corners_3d_list.append(corners_3d)
     return np.array(iou2d_list, dtype=np.float32), \
-                np.array(iou3d_list, dtype=np.float32), np.array(corners_3d_list, dtype=np.float32)
+        np.array(iou3d_list, dtype=np.float32), np.array(
+            corners_3d_list, dtype=np.float32)

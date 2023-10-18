@@ -45,11 +45,14 @@ class StereoCustomDataset(Dataset):
 
     def convertlabelformat(self, label, label_dir):
         center = label['centroid']
-        box3d_center = np.array([center['x'], center['y'], center['z']])
+        box3d_center = np.array([center['x'], center['y'], center['z']]) * 100
+        # box3d_center = np.array([center['x'], center['y'], center['z']])
         size_class = np.array([g_type2onehotclass[label['name']]])
         standard_size = g_type_mean_size[label['name']]
         size = label['dimensions']
-        box_size = np.array([size['length'], size['width'], size['height']])
+        box_size = np.array(
+            [size['length'], size['width'], size['height']]) * 100
+        # box_size = np.array([size['length'], size['width'], size['height']])
         size_residual = standard_size - box_size
         angle = label['rotations']['z']
         angle_per_class = 2 * np.pi / float(NUM_HEADING_BIN)
@@ -84,6 +87,8 @@ class StereoCustomDataset(Dataset):
             distance.append(norm(label_center - centroid_point, 2))
         idx = np.argmin(distance)
         label = d['objects'][idx]
+        pc_in_numpy = pc_in_numpy * 100
+        # pc_in_numpy = pc_in_numpy
         if self.DS:
             pc_in_numpy = self.downsample(pc_in_numpy, NUM_OBJECT_POINT)
         label2, img_dir = self.convertlabelformat(label, label_dir)
