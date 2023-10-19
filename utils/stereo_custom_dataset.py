@@ -12,8 +12,9 @@ import torch
 import json
 import numpy as np
 import open3d as o3d
+from typing import Tuple
+from numpy import ndarray
 from torch.utils.data import Dataset
-import torchvision.transforms as transforms
 from numpy.linalg import norm
 from torch.utils.data import DataLoader
 
@@ -26,6 +27,17 @@ label_path = os.path.join(PARENT_DIR, "datasets", "labels")
 
 class StereoCustomDataset(Dataset):
     def __init__(self, pc_path: str, label_path: str, downsample=True):
+        """custom dataset
+
+        Parameters
+        ----------
+        pc_path : str
+            input point cloud path 
+        label_path : str
+            labeled data path
+        downsample : bool, optional
+            downsample pointcloud flag, by default True
+        """
         super().__init__()
 
         self.pc_path = pc_path
@@ -34,7 +46,22 @@ class StereoCustomDataset(Dataset):
 
         self.pc_list = glob(f"{pc_path}/*.ply")
 
-    def downsample(self, pc_in_numpy, num_object_points):
+    def downsample(self, pc_in_numpy: ndarray, num_object_points: int) -> ndarray:
+        """downsample the pointcloud
+
+        Parameters
+        ----------
+        pc_in_numpy : ndarray
+            point cloud in adarray
+            size [N, 6]
+        num_object_points : int
+            num of object points desired
+
+        Returns
+        -------
+        ndarray
+            downsampled pointcloud
+        """
         pc_num = len(pc_in_numpy)
         idx = np.random.randint(pc_num, size=num_object_points)
         downsample_pc = pc_in_numpy[idx, :]
@@ -43,16 +70,29 @@ class StereoCustomDataset(Dataset):
     def __len__(self):
         return len(self.pc_list)
 
-    def convertlabelformat(self, label, label_dir):
+    def convertlabelformat(self, label: dict, label_dir: str) -> Tuple[dict, str]:
+        """convert the labeled 3D bounding box in the desired format
+
+        Parameters
+        ----------
+        label : dict
+            label data from the file
+        label_dir : str
+            label data directory
+
+        Returns
+        -------
+        Tuple[dict, str]
+            label2: label data in the desired format
+            img_dir: img directory correspond to the pointcloud
+        """
         center = label['centroid']
         box3d_center = np.array([center['x'], center['y'], center['z']]) * 100
-        # box3d_center = np.array([center['x'], center['y'], center['z']])
         size_class = np.array([g_type2onehotclass[label['name']]])
         standard_size = g_type_mean_size[label['name']]
         size = label['dimensions']
         box_size = np.array(
             [size['length'], size['width'], size['height']]) * 100
-        # box_size = np.array([size['length'], size['width'], size['height']])
         size_residual = standard_size - box_size
         angle = label['rotations']['z']
         angle_per_class = 2 * np.pi / float(NUM_HEADING_BIN)
@@ -65,11 +105,26 @@ class StereoCustomDataset(Dataset):
         num = a[0]
         x[-1] = f"Image_{num}.jpg"
         img_dir = "/".join(x)
-        label2 = {'one_hot': one_hot, 'box3d_center': box3d_center, 'size_class': size_class, 'size_residual': size_residual,
+        label2 = {'one_hot': one_hot, 'box3d_center': box3d_center,
+                  'size_class': size_class, 'size_residual': size_residual,
                   'angle_class': angle_class, 'angle_residual': angle_residual}
         return label2, img_dir
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Tuple[ndarray, dict, str]:
+        """getitem function for the custom dataset
+
+        Parameters
+        ----------
+        index : _type_
+            input data index
+
+        Returns
+        -------
+        Tuple[ndarray, dict, str]
+            pc_in_numpy: downsampled point cloud in ndarray
+            label2: deisred label data
+            img_dir: corresponding image directory 
+        """
         pcd = o3d.io.read_point_cloud(self.pc_list[index])
         pc_in_numpy = np.asarray(pcd.points)
         centroid_point = np.sum(pc_in_numpy, 0) / len(pc_in_numpy)
@@ -88,7 +143,6 @@ class StereoCustomDataset(Dataset):
         idx = np.argmin(distance)
         label = d['objects'][idx]
         pc_in_numpy = pc_in_numpy * 100
-        # pc_in_numpy = pc_in_numpy
         if self.DS:
             pc_in_numpy = self.downsample(pc_in_numpy, NUM_OBJECT_POINT)
         label2, img_dir = self.convertlabelformat(label, label_dir)
@@ -97,15 +151,6 @@ class StereoCustomDataset(Dataset):
 
 if __name__ == "__main__":
     dataset = StereoCustomDataset(pc_path, label_path)
-    # train_features, train_labels = next(iter(dataset))
-    # print(train_labels)
-
-    # # visualize the downsampled point cloud
-    # pcd = o3d.geometry.PointCloud()
-    # pcd.points = o3d.utility.Vector3dVector(train_features)
-    # o3d.visualization.draw_geometries([pcd])
-
-    # split the dataset into train and test dataset
     train_size = int(0.8 * len(dataset))
     test_size = len(dataset) - train_size
     train_dataset, test_dataset = torch.utils.data.random_split(
@@ -113,15 +158,3 @@ if __name__ == "__main__":
     train_dataloader = DataLoader(
         train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
     train_features, train_labels, img_dir = next(iter(train_dataloader))
-    box3d_center_label = train_labels.get('box3d_center')
-    size_class_label = train_labels.get('size_class')
-    size_residual_label = train_labels.get('size_residual')
-    heading_class_label = train_labels.get(
-        'angle_class')  # torch.Size([32, 1])
-    one_hot = train_labels.get(
-        'one_hot')
-    heading_residual_label = train_labels.get('angle_residual')
-    features = train_features.permute(0, 2, 1)
-    num_point = features.shape[2]
-    xyz_sum = features.sum(2, keepdim=True)
-    xyz_mean = xyz_sum / num_point

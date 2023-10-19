@@ -81,8 +81,6 @@ def get_box3d_corners_helper(centers, headings, sizes):
     corners = torch.cat([x_corners.view(N, 1, 8), y_corners.view(N, 1, 8),
                          z_corners.view(N, 1, 8)], dim=1)  # (N,3,8)
 
-    # ipdb.set_trace()
-    # print x_corners, y_corners, z_corners
     c = torch.cos(headings).cuda()
     s = torch.sin(headings).cuda()
     ones = torch.ones([N], dtype=torch.float32).cuda()
@@ -124,11 +122,9 @@ def get_box3d_corners(center, heading_residual, size_residual):
     centers = center.view(bs, 1, 1, 3).repeat(
         1, NUM_HEADING_BIN, NUM_SIZE_CLUSTER, 1)  # (bs,12,8,3)
     N = bs * NUM_HEADING_BIN * NUM_SIZE_CLUSTER
-    # ipdb.set_trace()
     corners_3d = get_box3d_corners_helper(centers.view(N, 3), headings.view(N),
                                           sizes.view(N, 3))
-    # ipdb.set_trace()
-    # [32, 12, 8, 8, 3]
+
     return corners_3d.view(bs, NUM_HEADING_BIN, NUM_SIZE_CLUSTER, 8, 3)
 
 
@@ -261,10 +257,7 @@ class PointNetLoss(nn.Module):
                                         size_residual_normalized_loss * 20 +
                                         stage1_center_loss +
                                         corner_loss_weight * corners_loss)
-        # total_loss = mask_loss
-        # tensor(306.7591, grad_fn=<AddBackward0>)
-        # if np.isnan(total_loss.item()) or total_loss > 10000.0:
-        # ipdb.set_trace()
+
         losses = {
             'total_loss': total_loss,
             'center_loss': box_loss_weight * center_loss,
@@ -276,9 +269,4 @@ class PointNetLoss(nn.Module):
             'corners_loss': box_loss_weight * corners_loss * corner_loss_weight,
         }
         return losses
-        '''
-        return total_loss, mask_loss, center_loss, heading_class_loss, \
-            size_class_loss, heading_residual_normalized_loss, \
-            size_residual_normalized_loss, stage1_center_loss, \
-            corners_loss
-        '''
+

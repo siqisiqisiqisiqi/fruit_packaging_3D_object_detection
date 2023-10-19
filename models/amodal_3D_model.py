@@ -1,5 +1,6 @@
 import sys
 import os
+from typing import Tuple
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
@@ -21,8 +22,8 @@ from src.params import *
 
 
 class PointNetEstimation(nn.Module):
-    def __init__(self, n_classes:int =1):
-        """Amodal 3D Box Estimation Pointnet
+    def __init__(self, n_classes: int = 1):
+        """Model estimate the 3D bounding box
 
         Parameters
         ----------
@@ -48,7 +49,7 @@ class PointNetEstimation(nn.Module):
         self.fcbn1 = nn.BatchNorm1d(512)
         self.fcbn2 = nn.BatchNorm1d(256)
 
-    def forward(self, pts: ndarray, one_hot_vec: ndarray)->tensor: 
+    def forward(self, pts: ndarray, one_hot_vec: ndarray) -> tensor:
         """
         Parameters
         ----------
@@ -83,7 +84,14 @@ class PointNetEstimation(nn.Module):
 
 
 class STNxyz(nn.Module):
-    def __init__(self, n_classes=1):
+    def __init__(self, n_classes: int = 1):
+        """transformation network
+
+        Parameters
+        ----------
+        n_classes : int, optional
+            Number of the object type, by default 1
+        """
         super(STNxyz, self).__init__()
         self.conv1 = torch.nn.Conv1d(3, 128, 1)
         self.conv2 = torch.nn.Conv1d(128, 128, 1)
@@ -102,7 +110,24 @@ class STNxyz(nn.Module):
         self.fcbn1 = nn.BatchNorm1d(256)
         self.fcbn2 = nn.BatchNorm1d(128)
 
-    def forward(self, pts, one_hot_vec):
+    def forward(self, pts: tensor, one_hot_vec: tensor) -> tensor:
+        """transformation network forward
+
+        Parameters
+        ----------
+        pts : tensor
+            point cloud
+            size [bs,3,num_point]
+        one_hot_vec : tensor
+            type of the object
+            size [bs,3]
+
+        Returns
+        -------
+        tensor
+            Translation center
+            size [bs,3]
+        """
         bs = pts.shape[0]
         x = F.relu(self.bn1(self.conv1(pts)))  # bs,128,n
         x = F.relu(self.bn2(self.conv2(x)))  # bs,128,n
@@ -117,7 +142,16 @@ class STNxyz(nn.Module):
 
 
 class Amodal3DModel(nn.Module):
-    def __init__(self, n_classes=1, n_channel=3):
+    def __init__(self, n_classes: int = 1, n_channel: int = 3):
+        """amodal 3D estimation model 
+
+        Parameters
+        ----------
+        n_classes : int, optional
+            Number of classes, by default 1
+        n_channel : int, optional
+            Number of channel used in the point cloud, by default 3
+        """
         super(Amodal3DModel, self).__init__()
         self.n_classes = n_classes
         self.n_channel = n_channel
@@ -125,21 +159,37 @@ class Amodal3DModel(nn.Module):
         self.est = PointNetEstimation(n_classes=1)
         self.Loss = PointNetLoss()
 
+    def forward(self, features: ndarray, label_dicts: dict) -> Tuple[dict, dict]:
+        """Amodal3DModel forward
 
-    def forward(self, features, label_dicts):
+        Parameters
+        ----------
+        features : ndarray
+            object point cloud
+            size [bs, num_point, 6]
+        label_dicts : dict
+            labeled result of the 3D bounding box
 
+        Returns
+        -------
+        Tuple[dict, dict]
+            losses: all the loss values stored in the dictionary
+            metrics: iou and corner calculation
+        """
         # point cloud after the instance segmentation
-        point_cloud = features.permute(0,2,1)
+        point_cloud = features.permute(0, 2, 1)
         point_cloud = point_cloud[:, :self.n_channel, :]
-        one_hot = label_dicts.get('one_hot') #torch.Size([32, 3])
+        one_hot = label_dicts.get('one_hot')  # torch.Size([32, 3])
         bs = point_cloud.shape[0]  # batch size
 
         # If not None, use to Compute Loss
-        box3d_center_label = label_dicts.get('box3d_center')  # torch.Size([32, 3])
+        box3d_center_label = label_dicts.get(
+            'box3d_center')  # torch.Size([32, 3])
         size_class_label = label_dicts.get('size_class')  # torch.Size([32, 1])
         size_residual_label = label_dicts.get(
             'size_residual')  # torch.Size([32, 3])
-        heading_class_label = label_dicts.get('angle_class')  # torch.Size([32, 1])
+        heading_class_label = label_dicts.get(
+            'angle_class')  # torch.Size([32, 1])
         heading_residual_label = label_dicts.get(
             'angle_residual')  # torch.Size([32, 1])
 
@@ -166,12 +216,12 @@ class Amodal3DModel(nn.Module):
 
         box3d_center = center_boxnet + stage1_center  # bs,3
         losses = self.Loss(box3d_center, box3d_center_label, stage1_center,
-                        heading_scores, heading_residual_normalized,
-                        heading_residual,
-                        heading_class_label, heading_residual_label,
-                        size_scores, size_residual_normalized,
-                        size_residual,
-                        size_class_label, size_residual_label)
+                           heading_scores, heading_residual_normalized,
+                           heading_residual,
+                           heading_class_label, heading_residual_label,
+                           size_scores, size_residual_normalized,
+                           size_residual,
+                           size_class_label, size_residual_label)
 
         for key in losses.keys():
             losses[key] = losses[key] / bs
