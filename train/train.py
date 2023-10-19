@@ -6,12 +6,12 @@ ROOT_DIR = os.path.dirname(BASE_DIR)
 PARENT_DIR = os.path.dirname(ROOT_DIR)
 sys.path.append(ROOT_DIR)
 
+import time
 import torch
 import random
 import numpy as np
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import time
 import matplotlib.pyplot as plt
 
 from models.amodal_3D_model import Amodal3DModel
@@ -22,38 +22,16 @@ pc_path = os.path.join(PARENT_DIR, "datasets", "pointclouds")
 label_path = os.path.join(PARENT_DIR, "datasets", "labels")
 save_path = os.path.join(ROOT_DIR, "results")
 
-dataset = StereoCustomDataset(pc_path, label_path)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(
-    dataset, [train_size, test_size])
-
-train_dataloader = DataLoader(
-    train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
-test_dataloader = DataLoader(
-    test_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
-
-# test the dataloader
-# train_features, train_labels = next(iter(train_dataloader))
-
-strtime = time.strftime('%Y%m%d-%H%M%S',time.localtime(time.time()))
-strtime = strtime[4:8]
-
-result_path = f"{save_path}/{strtime}"
-isExist = os.path.exists(result_path)
-if not isExist:
-    os.makedirs(result_path)
-
 # select the device
 is_cuda = torch.cuda.is_available()
 if is_cuda:
     device = torch.device("cuda")
 else:
     device = torch.device("cpu")
-# print(device)
 
 
-def test(model, loader):
+def test(model: Amodal3DModel, loader: DataLoader) -> dict, dict:
+
     test_losses = {
         'total_loss': 0.0,
         'center_loss': 0.0,
@@ -97,7 +75,8 @@ def test(model, loader):
 
     return test_losses, test_metrics
 
-def visualization(train_loss, test_loss,path):
+
+def plot_result(train_loss, test_loss, path):
     plt.plot(train_loss, c='b')
     plt.plot(test_loss, c='r')
     plt.legend(['Training set', 'test set'])
@@ -116,6 +95,26 @@ def train():
     torch.cuda.manual_seed_all(SEED)
     random.seed(SEED)
     torch.backends.cudnn.deterministic = True
+
+    dataset = StereoCustomDataset(pc_path, label_path)
+    train_size = int(0.8 * len(dataset))
+    test_size = len(dataset) - train_size
+    train_dataset, test_dataset = torch.utils.data.random_split(
+        dataset, [train_size, test_size])
+
+    train_dataloader = DataLoader(
+        train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
+    test_dataloader = DataLoader(
+        test_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
+    print(type(test_dataloader))
+
+    strtime = time.strftime('%Y%m%d-%H%M%S', time.localtime(time.time()))
+    strtime = strtime[4:8]
+
+    result_path = f"{save_path}/{strtime}"
+    isExist = os.path.exists(result_path)
+    if not isExist:
+        os.makedirs(result_path)
 
     model = Amodal3DModel()
     model.to(device)
@@ -173,11 +172,13 @@ def train():
             train_losses[key] /= n_batches
         for key in train_metrics.keys():
             train_metrics[key] /= n_batches
-        print(f"Finished the {epoch} epoch train +++++++++++++++++++ Total train loss is {train_losses['total_loss']}")
+        print(
+            f"Finished the {epoch} epoch train +++++++++++++++++++ Total train loss is {train_losses['total_loss']}")
         train_total_losses_data.append(train_losses['total_loss'])
 
         test_losses, test_metrics = test(model, test_dataloader)
-        print(f"Finished the {epoch} epoch test +++++++++++++++++++ Total test loss is {test_losses['total_loss']}")
+        print(
+            f"Finished the {epoch} epoch test +++++++++++++++++++ Total test loss is {test_losses['total_loss']}")
         test_total_losses_data.append(test_losses['total_loss'])
         scheduler.step()
 
@@ -197,9 +198,11 @@ def train():
                     'optimizer_state_dict': optimizer.state_dict(),
                 }
                 torch.save(state, savepath)
-                print(f"Saved the {epoch}th epoch model as {save_path}/{strtime}_epoch{epoch}.pth")
+                print(
+                    f"Saved the {epoch}th epoch model as {save_path}/{strtime}_epoch{epoch}.pth")
 
-    visualization(train_total_losses_data, test_total_losses_data, result_path)
+    plot_result(train_total_losses_data, test_total_losses_data, result_path)
+
 
 if __name__ == "__main__":
     train()
