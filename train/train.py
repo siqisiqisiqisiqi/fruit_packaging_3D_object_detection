@@ -1,5 +1,6 @@
 import sys
 import os
+from typing import Tuple
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
@@ -30,8 +31,21 @@ else:
     device = torch.device("cpu")
 
 
-def test(model: Amodal3DModel, loader: DataLoader) -> dict, dict:
+def test(model: Amodal3DModel, loader: DataLoader) -> Tuple[dict, dict]:
+    """_summary_
 
+    Parameters
+    ----------
+    model : Amodal3DModel
+        3D object detection model
+    loader : DataLoader
+        test_dataloader
+
+    Returns
+    -------
+    Tuple[dict, dict]
+        return the test loss and iou metric
+    """
     test_losses = {
         'total_loss': 0.0,
         'center_loss': 0.0,
@@ -76,7 +90,18 @@ def test(model: Amodal3DModel, loader: DataLoader) -> dict, dict:
     return test_losses, test_metrics
 
 
-def plot_result(train_loss, test_loss, path):
+def plot_result(train_loss: list, test_loss: list, path: str):
+    """Plot the train loss and test loss
+
+    Parameters
+    ----------
+    train_loss : list
+        Loss value in the training process
+    test_loss : list
+        Loss value in the testing process
+    path : str
+        Path to save the image
+    """
     plt.plot(train_loss, c='b')
     plt.plot(test_loss, c='r')
     plt.legend(['Training set', 'test set'])
@@ -106,7 +131,6 @@ def train():
         train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
     test_dataloader = DataLoader(
         test_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
-    print(type(test_dataloader))
 
     strtime = time.strftime('%Y%m%d-%H%M%S', time.localtime(time.time()))
     strtime = strtime[4:8]
