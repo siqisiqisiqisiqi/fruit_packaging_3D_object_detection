@@ -7,9 +7,11 @@ sys.path.append(ROOT_DIR)
 
 import ipdb
 import torch
+from torch import tensor
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from numpy import ndarray
 from torch.nn import init
 
 from utils.model_util import PointNetLoss, parse_output_to_tensors
@@ -19,11 +21,14 @@ from src.params import *
 
 
 class PointNetEstimation(nn.Module):
-    def __init__(self, n_classes=1):
-        '''v1 Amodal 3D Box Estimation Pointnet
-        :param n_classes:3
-        :param one_hot_vec:[bs,n_classes]
-        '''
+    def __init__(self, n_classes:int =1):
+        """Amodal 3D Box Estimation Pointnet
+
+        Parameters
+        ----------
+        n_classes : int, optional
+            Number of the object type, by default 1
+        """
         super(PointNetEstimation, self).__init__()
         self.conv1 = nn.Conv1d(3, 128, 1)
         self.conv2 = nn.Conv1d(128, 128, 1)
@@ -43,13 +48,22 @@ class PointNetEstimation(nn.Module):
         self.fcbn1 = nn.BatchNorm1d(512)
         self.fcbn2 = nn.BatchNorm1d(256)
 
-    def forward(self, pts, one_hot_vec):  # bs,3,m
-        '''
-        :param pts: [bs,3,m]: x,y,z after InstanceSeg
-        :return: box_pred: [bs,3+NUM_HEADING_BIN*2+NUM_SIZE_CLUSTER*4]
-            including box centers, heading bin class scores and residual,
-            and size cluster scores and residual
-        '''
+    def forward(self, pts: ndarray, one_hot_vec: ndarray)->tensor: 
+        """
+        Parameters
+        ----------
+        pts : ndarray
+            point cloud 
+            size bsx3xnum_point
+        one_hot_vec : ndarray
+            one hot vector type 
+            size bsxn_classes
+
+        Returns
+        -------
+        tensor
+            size 3x3+NUM_HEADING_BIN*2+NUM_SIZE_CLUSTER*4
+        """
         bs = pts.size()[0]
         n_pts = pts.size()[2]
 
