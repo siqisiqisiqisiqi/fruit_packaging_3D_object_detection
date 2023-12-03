@@ -17,7 +17,7 @@ from torch.nn import init
 
 from utils.model_util import PointNetLoss, parse_output_to_tensors
 from utils.point_cloud_process import point_cloud_process
-from utils.compute_box3d_iou import compute_box3d_iou
+from utils.compute_box3d_iou import compute_box3d_iou, calculate_corner
 from src.params import *
 
 
@@ -159,7 +159,7 @@ class Amodal3DModel(nn.Module):
         self.est = PointNetEstimation(n_classes=1)
         self.Loss = PointNetLoss()
 
-    def forward(self, features: ndarray, label_dicts: dict) -> Tuple[dict, dict]:
+    def forward(self, features: ndarray, label_dicts: dict = {}) -> Tuple[dict, dict]:
         """Amodal3DModel forward
 
         Parameters
@@ -179,19 +179,9 @@ class Amodal3DModel(nn.Module):
         # point cloud after the instance segmentation
         point_cloud = features.permute(0, 2, 1)
         point_cloud = point_cloud[:, :self.n_channel, :]
-        one_hot = label_dicts.get('one_hot')  # torch.Size([32, 3])
-        bs = point_cloud.shape[0]  # batch size
 
-        # If not None, use to Compute Loss
-        box3d_center_label = label_dicts.get(
-            'box3d_center')  # torch.Size([32, 3])
-        size_class_label = label_dicts.get('size_class')  # torch.Size([32, 1])
-        size_residual_label = label_dicts.get(
-            'size_residual')  # torch.Size([32, 3])
-        heading_class_label = label_dicts.get(
-            'angle_class')  # torch.Size([32, 1])
-        heading_residual_label = label_dicts.get(
-            'angle_residual')  # torch.Size([32, 1])
+        bs = point_cloud.shape[0]  # batch size
+        one_hot = torch.tensor(np.ones((bs,1)), dtype = torch.int).cuda()
 
         # object_pts_xyz size (batchsize, number object point, 3)
         object_pts_xyz, mask_xyz_mean = point_cloud_process(point_cloud)
@@ -215,33 +205,53 @@ class Amodal3DModel(nn.Module):
             parse_output_to_tensors(box_pred)
 
         box3d_center = center_boxnet + stage1_center  # bs,3
-        losses = self.Loss(box3d_center, box3d_center_label, stage1_center,
-                           heading_scores, heading_residual_normalized,
-                           heading_residual,
-                           heading_class_label, heading_residual_label,
-                           size_scores, size_residual_normalized,
-                           size_residual,
-                           size_class_label, size_residual_label)
 
-        for key in losses.keys():
-            losses[key] = losses[key] / bs
-
+        if len(label_dicts) == 0:
             with torch.no_grad():
-                iou2ds, iou3ds, corners = compute_box3d_iou(
-                    box3d_center.detach().cpu().numpy(),
-                    heading_scores.detach().cpu().numpy(),
-                    heading_residual.detach().cpu().numpy(),
-                    size_scores.detach().cpu().numpy(),
-                    size_residual.detach().cpu().numpy(),
-                    box3d_center_label.detach().cpu().numpy(),
-                    heading_class_label.detach().cpu().numpy().squeeze(),
-                    heading_residual_label.detach().cpu().numpy().squeeze(),
-                    size_class_label.detach().cpu().numpy().squeeze(),
-                    size_residual_label.detach().cpu().numpy())
-            metrics = {
-                'corners': corners,
-                'iou2d': iou2ds.mean(),
-                'iou3d': iou3ds.mean(),
-                'iou3d_0.7': np.sum(iou3ds >= 0.7) / bs
-            }
-            return losses, metrics
+                corners = calculate_corner(box3d_center.detach().cpu().numpy(),
+                                            heading_scores.detach().cpu().numpy(),
+                                            heading_residual.detach().cpu().numpy(),
+                                            size_scores.detach().cpu().numpy(),
+                                            size_residual.detach().cpu().numpy())
+            return corners
+
+        else:
+            # If not None, use to Compute Loss
+            one_hot_label = label_dicts.get('one_hot')  # torch.Size([32, 1])
+            box3d_center_label = label_dicts.get('box3d_center')  # torch.Size([32, 3])
+            size_class_label = label_dicts.get('size_class')  # torch.Size([32, 1])
+            size_residual_label = label_dicts.get('size_residual')  # torch.Size([32, 3])
+            heading_class_label = label_dicts.get('angle_class')  # torch.Size([32, 1])
+            heading_residual_label = label_dicts.get('angle_residual')  # torch.Size([32, 1])
+
+            losses = self.Loss(box3d_center, box3d_center_label, stage1_center,
+                            heading_scores, heading_residual_normalized,
+                            heading_residual,
+                            heading_class_label, heading_residual_label,
+                            size_scores, size_residual_normalized,
+                            size_residual,
+                            size_class_label, size_residual_label)
+
+            for key in losses.keys():
+                losses[key] = losses[key] / bs
+
+                with torch.no_grad():
+                    iou2ds, iou3ds, corners = compute_box3d_iou(
+                        box3d_center.detach().cpu().numpy(),
+                        heading_scores.detach().cpu().numpy(),
+                        heading_residual.detach().cpu().numpy(),
+                        size_scores.detach().cpu().numpy(),
+                        size_residual.detach().cpu().numpy(),
+                        box3d_center_label.detach().cpu().numpy(),
+                        heading_class_label.detach().cpu().numpy().squeeze(),
+                        heading_residual_label.detach().cpu().numpy().squeeze(),
+                        size_class_label.detach().cpu().numpy().squeeze(),
+                        size_residual_label.detach().cpu().numpy())
+                metrics = {
+                    'corners': corners,
+                    'iou2d': iou2ds.mean(),
+                    'iou3d': iou3ds.mean(),
+                    'iou3d_0.7': np.sum(iou3ds >= 0.7) / bs
+                }
+                return losses, metrics
+        

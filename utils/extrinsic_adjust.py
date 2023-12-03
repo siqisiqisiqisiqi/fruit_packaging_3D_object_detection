@@ -12,6 +12,8 @@ def main():
     tvecs[1, 0] = -1 * tvecs[1, 0]
     tvecs[2, 0] = -1 * tvecs[2, 0]
 
+    print(tvecs)
+
     r = R.from_euler('y', -2.0, degrees=True)
     R_euler = r.as_matrix()
     Mat2 = Mat @ R_euler

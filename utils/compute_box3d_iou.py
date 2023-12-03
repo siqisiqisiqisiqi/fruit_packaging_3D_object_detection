@@ -69,6 +69,29 @@ def get_3d_box(box_size, heading_angle, center):
     return corners_3d
 
 
+def calculate_corner(center_pred, heading_logits, heading_residual,
+                     size_logits, size_residual):
+    batch_size = heading_logits.shape[0]
+    heading_class = np.argmax(heading_logits, 1)  # B
+    # get the highest score classes heading and size data
+    heading_residual = np.array([heading_residual[i, heading_class[i]]
+                                 for i in range(batch_size)])  # B,
+    size_class = np.argmax(size_logits, 1)  # B
+    size_residual = np.vstack([size_residual[i, size_class[i], :]
+                               for i in range(batch_size)])
+    corners_3d_list = []
+    for i in range(batch_size):
+        # calculate the 3D orientation and size
+        heading_angle = class2angle(heading_class[i],
+                                    heading_residual[i], NUM_HEADING_BIN)
+        # heading_angle = 0
+        box_size = class2size(size_class[i], size_residual[i])
+        # calculate the box corner coordinates
+        corners_3d = get_3d_box(box_size, heading_angle, center_pred[i])
+        corners_3d_list.append(corners_3d)
+    return corners_3d_list
+
+
 def compute_box3d_iou(center_pred,
                       heading_logits, heading_residual,
                       size_logits, size_residual,
