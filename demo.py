@@ -11,6 +11,7 @@ import numpy as np
 from numpy import ndarray
 from torch.utils.data import DataLoader
 import open3d as o3d
+import time
 import glob
 import cv2
 
@@ -144,8 +145,10 @@ def main():
         features = point_cloud_input(data_path)
         features = features.to(device, dtype=torch.float)
         with torch.no_grad():
+            tik = time.time()
             corners = model(features)
-        # print(corners)
+            tok = time.time()
+            print(f"inference time is {tok-tik}")
         visaulization(img_path, corners[0] / 100)
 
 
